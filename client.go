@@ -2,17 +2,19 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"net/url"
 	"os"
 	"os/signal"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-var addr = flag.String("addr", "localhost:12111", "http service address")
+const (
+	hostAddress   = "localhost:8888"
+	handshakePath = "/handshake"
+	scheme        = "ws"
+)
 
 func main() {
 	flag.Parse()
@@ -21,7 +23,7 @@ func main() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	u := url.URL{Scheme: "ws", Host: *addr, Path: "/echo"}
+	u := url.URL{Scheme: scheme, Host: hostAddress, Path: handshakePath, RawQuery: "key=mykey&another=myAnother"}
 	log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -31,25 +33,8 @@ func main() {
 
 	defer c.Close()
 
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-		for {
-			mt, _, err := c.ReadMessage()
-			if err != nil {
-				log.Fatal(err)
-			}
-			c.WriteMessage(mt, []byte("selamin aleykum"))
-		}
-	}()
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
 	for {
-		var input string
-		fmt.Scanln(&input)
-		c.WriteMessage(websocket.TextMessage, []byte(input))
+		_, bytes, _ := c.ReadMessage()
+		log.Println(string(bytes))
 	}
 }

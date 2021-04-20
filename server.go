@@ -1,124 +1,92 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
-	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 
 	"github.com/gorilla/websocket"
 )
 
-var addr = flag.String("addr", "localhost:12111", "http service address")
+type baseResponse struct {
+	code    int
+	message string
+}
 
-var upgrader = websocket.Upgrader{}
+var connections = make(map[string]*websocket.Conn)
 
-func echo(w http.ResponseWriter, r *http.Request) {
+var (
+	success          = baseResponse{code: 0, message: "OK"}
+	alreadyConnected = baseResponse{code: 204, message: "Handshake already completed"}
+	illegalArgument  = baseResponse{code: 403, message: "Illeagal argument exceptiono"}
+	failed           = baseResponse{code: 404, message: "Unknown Error"}
+)
 
-	c, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Print("upgrade: ", err)
+func validateKey(values url.Values) bool {
+	return values.Get("key") == ""
+}
+
+func sendSampleNotification(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	if validateKey(query) {
+		log.Println(saveConvertJSON(illegalArgument))
+		w.Write(saveConvertJSON(illegalArgument))
 		return
 	}
 
-	defer c.Close()
-
-	for {
-		_, message, err := c.ReadMessage()
-		if err != nil {
-			log.Println("read: ", err)
-			break
-		}
-		log.Printf("message: %s", message)
-		// err = c.WriteMessage(mt, message)
-		// if err != nil {
-		// 	log.Println("write: ", err)
-		// 	break
-		// }
+	uniqueKey := query.Get("key")
+	notificationMessage := `{"message": "Sample notification"}`
+	if potentialNotificationMessage := query.Get("notificationMessage"); potentialNotificationMessage != "" {
+		notificationMessage = potentialNotificationMessage
 	}
+
+	if conn, ok := connections[uniqueKey]; ok {
+		log.Println(saveConvertJSON(success))
+		log.Println(notificationMessage)
+		conn.WriteJSON(notificationMessage)
+		w.Write(saveConvertJSON(success))
+		return
+	}
+
+	log.Println(saveConvertJSON(failed))
+	w.Write(saveConvertJSON(failed))
 }
 
-func home(w http.ResponseWriter, r *http.Request) {
-	homeTemplate.Execute(w, "ws://"+r.Host+"/echo")
+func saveConvertJSON(v interface{}) []byte {
+	bytes, _ := json.Marshal(v)
+	return bytes
+}
+
+func handshake(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	if validateKey(query) {
+		w.Write(saveConvertJSON(illegalArgument))
+		return
+	}
+
+	uniqueKey := query.Get("key")
+
+	if _, ok := connections[uniqueKey]; ok {
+		w.Write(saveConvertJSON(alreadyConnected))
+		return
+	}
+
+	upgrader := websocket.Upgrader{}
+	if connection, err := upgrader.Upgrade(w, r, nil); err == nil {
+		connections[uniqueKey] = connection
+	} else {
+		w.Write(saveConvertJSON(failed))
+	}
 }
 
 func main() {
 	flag.Parse()
 	log.SetFlags(0)
-	http.HandleFunc("/echo", echo)
-	http.HandleFunc("/", home)
-	log.Fatal(http.ListenAndServe(*addr, nil))
+	http.HandleFunc("/handshake", handshake)
+	http.HandleFunc("/notification", sendSampleNotification)
+	log.Fatal(http.ListenAndServe("localhost:8888", nil))
 }
-
-var homeTemplate = template.Must(template.New("").Parse(`
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<script>  
-window.addEventListener("load", function(evt) {
-    var output = document.getElementById("output");
-    var input = document.getElementById("input");
-    var ws;
-    var print = function(message) {
-        var d = document.createElement("div");
-        d.textContent = message;
-        output.appendChild(d);
-    };
-    document.getElementById("open").onclick = function(evt) {
-        if (ws) {
-            return false;
-        }
-        ws = new WebSocket("{{.}}");
-        ws.onopen = function(evt) {
-            print("OPEN");
-        }
-        ws.onclose = function(evt) {
-            print("CLOSE");
-            ws = null;
-        }
-        ws.onmessage = function(evt) {
-            print("RESPONSE: " + evt.data);
-        }
-        ws.onerror = function(evt) {
-            print("ERROR: " + evt.data);
-        }
-        return false;
-    };
-    document.getElementById("send").onclick = function(evt) {
-        if (!ws) {
-            return false;
-        }
-        print("SEND: " + input.value);
-        ws.send(input.value);
-        return false;
-    };
-    document.getElementById("close").onclick = function(evt) {
-        if (!ws) {
-            return false;
-        }
-        ws.close();
-        return false;
-    };
-});
-</script>
-</head>
-<body>
-<table>
-<tr><td valign="top" width="50%">
-<p>Click "Open" to create a connection to the server, 
-"Send" to send a message to the server and "Close" to close the connection. 
-You can change the message and send multiple times.
-<p>
-<form>
-<button id="open">Open</button>
-<button id="close">Close</button>
-<p><input id="input" type="text" value="Hello world!">
-<button id="send">Send</button>
-</form>
-</td><td valign="top" width="50%">
-<div id="output"></div>
-</td></tr></table>
-</body>
-</html>
-`))
