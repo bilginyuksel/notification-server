@@ -5,66 +5,73 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+
+	conn "github.com/bilginyuksel/notification-server/server/conn"
+	dto "github.com/bilginyuksel/notification-server/server/dto"
+	entity "github.com/bilginyuksel/notification-server/server/entity"
 )
 
-var pool = GetPoolInstance()
+var pool = conn.GetPoolInstance()
+
+type (
+	customEndpointHandler func(w http.ResponseWriter, r *http.Request, uniqueKey string) interface{}
+
+	endpointHandler func(w http.ResponseWriter, r *http.Request)
+)
 
 func pushNotification(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	if hasKey(query) {
-		log.Println(illegalArgument)
-		w.Write(json2byte(illegalArgument))
+		log.Println(dto.IllegalArgument)
+		w.Write(json2byte(dto.IllegalArgument))
 		return
 	}
 
 	uniqueKey := query.Get("key")
 
-	notificationMessage := Notification{
+	notificationMessage := entity.Notification{
 		Title:       "Golang Push Server Test",
 		Description: "First push notification try"}
 
-	if conn, err := pool.get(uniqueKey); err == nil {
-		log.Println(success, notificationMessage)
-		conn.WriteJSON(notificationMessage)
-		w.Write(json2byte(success))
-		return
+	if err := pool.Write(uniqueKey, notificationMessage); err != nil {
+		w.Write(json2byte(dto.Failed))
 	}
 
-	log.Println(failed)
-	w.Write(json2byte(failed))
+	w.Write(json2byte(notificationMessage))
+
 }
 
 func handshake(w http.ResponseWriter, r *http.Request, uniqueKey string) interface{} {
 
-	if _, err := pool.get(uniqueKey); err == nil {
-		return alreadyConnected
+	if pool.Has(uniqueKey) {
+		return dto.AlreadyConnected
 	}
 
 	upgrader := websocket.Upgrader{}
 	connection, err := upgrader.Upgrade(w, r, nil)
 
 	if err != nil {
-		return failed
+		return dto.Failed
 	}
 
-	pool.add(uniqueKey, connection)
+	pool.Add(uniqueKey, connection)
 
-	return success
+	return dto.Success
 }
 
 func closeConnection(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	if hasKey(query) {
-		w.Write(json2byte(illegalArgument))
+		w.Write(json2byte(dto.IllegalArgument))
 	}
 
 	uniqueKey := query.Get("key")
 
-	if connection, err := pool.get(uniqueKey); err != nil {
-		connection.Close()
-		w.Write(json2byte(success))
+	if pool.Has(uniqueKey) {
+		pool.Close(uniqueKey)
+		w.Write(json2byte(dto.Success))
 	}
 }
 
@@ -73,7 +80,7 @@ func middleware(callback customEndpointHandler) endpointHandler {
 		query := r.URL.Query()
 
 		if hasKey(query) {
-			w.Write(json2byte(illegalArgument))
+			w.Write(json2byte(dto.IllegalArgument))
 		}
 
 		json := callback(w, r, query.Get("key"))
