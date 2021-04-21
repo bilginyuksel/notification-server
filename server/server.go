@@ -1,67 +1,43 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
-	"net/url"
 
 	"github.com/gorilla/websocket"
 )
 
-type baseResponse struct {
-	code    int
-	message string
-}
+var pool = GetPoolInstance()
 
-var connections = make(map[string]*websocket.Conn)
-
-var (
-	success          = baseResponse{code: 0, message: "OK"}
-	alreadyConnected = baseResponse{code: 204, message: "Handshake already completed"}
-	illegalArgument  = baseResponse{code: 403, message: "Illeagal argument exceptiono"}
-	failed           = baseResponse{code: 404, message: "Unknown Error"}
-)
-
-func validateKey(values url.Values) bool {
-	return values.Get("key") == ""
-}
-
-func sendSampleNotification(w http.ResponseWriter, r *http.Request) {
+func pushNotification(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
-	if validateKey(query) {
-		log.Println(saveConvertJSON(illegalArgument))
-		w.Write(saveConvertJSON(illegalArgument))
+	if hasKey(query) {
+		log.Println(illegalArgument)
+		w.Write(json2byte(illegalArgument))
 		return
 	}
 
 	uniqueKey := query.Get("key")
-	notificationMessage := `{"message": "Sample notification"}`
-	if potentialNotificationMessage := query.Get("notificationMessage"); potentialNotificationMessage != "" {
-		notificationMessage = potentialNotificationMessage
-	}
 
-	if conn, ok := connections[uniqueKey]; ok {
-		log.Println(saveConvertJSON(success))
-		log.Println(notificationMessage)
+	notificationMessage := Notification{
+		Title:       "Golang Push Server Test",
+		Description: "First push notification try"}
+
+	if conn, err := pool.get(uniqueKey); err == nil {
+		log.Println(success, notificationMessage)
 		conn.WriteJSON(notificationMessage)
-		w.Write(saveConvertJSON(success))
+		w.Write(json2byte(success))
 		return
 	}
 
-	log.Println(saveConvertJSON(failed))
-	w.Write(saveConvertJSON(failed))
-}
-
-func saveConvertJSON(v interface{}) []byte {
-	bytes, _ := json.Marshal(v)
-	return bytes
+	log.Println(failed)
+	w.Write(json2byte(failed))
 }
 
 func handshake(w http.ResponseWriter, r *http.Request, uniqueKey string) interface{} {
 
-	if _, ok := connections[uniqueKey]; ok {
+	if _, err := pool.get(uniqueKey); err == nil {
 		return alreadyConnected
 	}
 
@@ -72,7 +48,7 @@ func handshake(w http.ResponseWriter, r *http.Request, uniqueKey string) interfa
 		return failed
 	}
 
-	connections[uniqueKey] = connection
+	pool.add(uniqueKey, connection)
 
 	return success
 }
@@ -80,27 +56,24 @@ func handshake(w http.ResponseWriter, r *http.Request, uniqueKey string) interfa
 func closeConnection(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
-	if validateKey(query) {
-		w.Write(saveConvertJSON(illegalArgument))
+	if hasKey(query) {
+		w.Write(json2byte(illegalArgument))
 	}
 
 	uniqueKey := query.Get("key")
 
-	if connection, ok := connections[uniqueKey]; ok {
+	if connection, err := pool.get(uniqueKey); err != nil {
 		connection.Close()
-		w.Write(saveConvertJSON(success))
+		w.Write(json2byte(success))
 	}
 }
-
-type customEndpointHandler func(w http.ResponseWriter, r *http.Request, uniqueKey string) interface{}
-type endpointHandler func(w http.ResponseWriter, r *http.Request)
 
 func middleware(callback customEndpointHandler) endpointHandler {
 	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 
-		if validateKey(query) {
-			w.Write(saveConvertJSON(illegalArgument))
+		if hasKey(query) {
+			w.Write(json2byte(illegalArgument))
 		}
 
 		json := callback(w, r, query.Get("key"))
@@ -112,6 +85,6 @@ func middleware(callback customEndpointHandler) endpointHandler {
 func main() {
 	log.SetFlags(0)
 	http.HandleFunc("/handshake", middleware(handshake))
-	http.HandleFunc("/notification", sendSampleNotification)
+	http.HandleFunc("/notification", pushNotification)
 	log.Fatal(http.ListenAndServe("localhost:8888", nil))
 }
