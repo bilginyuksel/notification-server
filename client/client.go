@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"log"
 	"net/url"
 	"os"
@@ -17,7 +16,6 @@ const (
 )
 
 func main() {
-	flag.Parse()
 	log.SetFlags(0)
 
 	interrupt := make(chan os.Signal, 1)

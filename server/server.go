@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"log"
 	"net/http"
 	"net/url"
@@ -60,33 +59,59 @@ func saveConvertJSON(v interface{}) []byte {
 	return bytes
 }
 
-func handshake(w http.ResponseWriter, r *http.Request) {
+func handshake(w http.ResponseWriter, r *http.Request, uniqueKey string) interface{} {
+
+	if _, ok := connections[uniqueKey]; ok {
+		return alreadyConnected
+	}
+
+	upgrader := websocket.Upgrader{}
+	connection, err := upgrader.Upgrade(w, r, nil)
+
+	if err != nil {
+		return failed
+	}
+
+	connections[uniqueKey] = connection
+
+	return success
+}
+
+func closeConnection(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	if validateKey(query) {
 		w.Write(saveConvertJSON(illegalArgument))
-		return
 	}
 
 	uniqueKey := query.Get("key")
 
-	if _, ok := connections[uniqueKey]; ok {
-		w.Write(saveConvertJSON(alreadyConnected))
-		return
+	if connection, ok := connections[uniqueKey]; ok {
+		connection.Close()
+		w.Write(saveConvertJSON(success))
 	}
+}
 
-	upgrader := websocket.Upgrader{}
-	if connection, err := upgrader.Upgrade(w, r, nil); err == nil {
-		connections[uniqueKey] = connection
-	} else {
-		w.Write(saveConvertJSON(failed))
+type customEndpointHandler func(w http.ResponseWriter, r *http.Request, uniqueKey string) interface{}
+type endpointHandler func(w http.ResponseWriter, r *http.Request)
+
+func middleware(callback customEndpointHandler) endpointHandler {
+	return func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+
+		if validateKey(query) {
+			w.Write(saveConvertJSON(illegalArgument))
+		}
+
+		json := callback(w, r, query.Get("key"))
+		log.Println(json)
+		// w.Write(saveConvertJSON(json))
 	}
 }
 
 func main() {
-	flag.Parse()
 	log.SetFlags(0)
-	http.HandleFunc("/handshake", handshake)
+	http.HandleFunc("/handshake", middleware(handshake))
 	http.HandleFunc("/notification", sendSampleNotification)
 	log.Fatal(http.ListenAndServe("localhost:8888", nil))
 }
