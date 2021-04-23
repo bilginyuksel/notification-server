@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/url"
 	"os"
 	"os/signal"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -21,7 +23,13 @@ func main() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	u := url.URL{Scheme: scheme, Host: hostAddress, Path: handshakePath, RawQuery: "key=mykey&another=myAnother"}
+	uuid, _ := uuid.NewUUID()
+
+	u := url.URL{Scheme: scheme,
+		Host:     hostAddress,
+		Path:     handshakePath,
+		RawQuery: fmt.Sprintf("clientId=" + uuid.String())}
+
 	log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
