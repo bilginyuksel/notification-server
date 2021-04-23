@@ -53,7 +53,7 @@ func handshakeStatus(w http.ResponseWriter, r *http.Request) {
 
 	clientId := r.URL.Query().Get("clientId")
 
-	if status, err := getStatus(clientId); err != nil {
+	if status, err := getStatus(clientId); err == nil {
 		res, _ := json.Marshal(status)
 		w.Write(res)
 	} else {
