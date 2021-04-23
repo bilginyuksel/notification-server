@@ -17,6 +17,9 @@ type (
 	customEndpointHandler func(w http.ResponseWriter, r *http.Request, uniqueKey string) interface{}
 
 	endpointHandler func(w http.ResponseWriter, r *http.Request)
+
+	requestInterceptor  []endpointHandler
+	responseInterceptor []endpointHandler
 )
 
 func pushNotification(w http.ResponseWriter, r *http.Request) {

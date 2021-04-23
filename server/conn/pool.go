@@ -8,11 +8,11 @@ import (
 )
 
 var singletonPool = &connectionPoolImpl{
-	socketConnections: make(map[string]*websocket.Conn),
+	socketConnections: make(map[string]Connection),
 }
 
 type connectionPoolImpl struct {
-	socketConnections map[string]*websocket.Conn
+	socketConnections map[string]Connection
 }
 
 type ConnectionPool interface {
@@ -32,7 +32,7 @@ func (cp *connectionPoolImpl) Add(id string, conn *websocket.Conn) error {
 		return errors.New("connection already exist")
 	}
 
-	cp.socketConnections[id] = conn
+	cp.socketConnections[id] = NewWebsocketConnection(id, conn)
 	return nil
 }
 
@@ -44,7 +44,7 @@ func (cp *connectionPoolImpl) Write(id string, notification entity.Notification)
 		return err
 	}
 
-	return conn.WriteJSON(notification)
+	return conn.SendJSON(notification)
 }
 
 // Has ...
@@ -63,7 +63,7 @@ func (cp *connectionPoolImpl) Close(id string) error {
 	return conn.Close()
 }
 
-func (cp *connectionPoolImpl) get(id string) (*websocket.Conn, error) {
+func (cp *connectionPoolImpl) get(id string) (Connection, error) {
 	conn, ok := cp.socketConnections[id]
 	if !ok {
 		return nil, errors.New("no socket connection found")
