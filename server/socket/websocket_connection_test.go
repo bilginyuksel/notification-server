@@ -22,7 +22,7 @@ func testServerCallback(w http.ResponseWriter, r *http.Request) {
 	c, err := NewWSConn(clientId, w, r)
 
 	if err != nil {
-		log.Fatal("connection couldn't established, err= ", err)
+		log.Fatal("connection couldn't established, err: ", err)
 	}
 
 	c.Send(wsTestMessage)

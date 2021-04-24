@@ -12,11 +12,11 @@ func acceptConnection(clientId string, w http.ResponseWriter, r *http.Request) {
 	wsConn, err := socket.NewWSConn(clientId, w, r)
 
 	if err != nil {
-		log.Println("handshake failed, err= ", err)
+		log.Println("handshake failed, err: ", err)
 	}
 
 	socket.GetPoolInstance().Add(clientId, wsConn)
-	log.Println("accepted connection with client= ", clientId)
+	log.Println("accepted connection with client: ", clientId)
 }
 
 func closeConnection(clientId string) error {
