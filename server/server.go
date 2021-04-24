@@ -8,5 +8,8 @@ import (
 
 func main() {
 	log.SetFlags(0)
+	go func() {
+		setNotificationConsumer()
+	}()
 	endpoint.StartServer()
 }
