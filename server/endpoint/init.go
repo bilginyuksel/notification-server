@@ -20,6 +20,8 @@ func StartServerWithHostnameAndPort(hostname string, port int) {
 
 	url := fmt.Sprintf("%s:%d", hostname, port)
 
+	log.Println("up and running, ", url)
+
 	log.Fatal(http.ListenAndServe(url, nil))
 }
 
