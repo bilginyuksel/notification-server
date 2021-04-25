@@ -16,6 +16,8 @@ func StartServerWithHostnameAndPort(hostname string, port int) {
 	http.HandleFunc("/handshake", handshake)
 	http.HandleFunc("/handshake/stop", handshakeStop)
 	http.HandleFunc("/handshake/status", handshakeStatus)
+
+	// send notification in debug mode
 	http.HandleFunc("/notification", sendNotification)
 
 	url := fmt.Sprintf("%s:%d", hostname, port)

@@ -12,16 +12,6 @@ import (
 	"github.com/Shopify/sarama"
 )
 
-const (
-	brokers  = "localhost:9092" // comma seperated list
-	version  = "2.1.1"
-	topics   = "sarama" // comma seperated list
-	group    = "example"
-	assignor = "range" // Consumer group partition assignment strategy (range, roundrobin, sticky)
-	oldest   = true    // Kafka consumer consume initial offset from oldest
-	verbose  = true    // Sarama logging
-)
-
 func setNotificationConsumer() {
 
 	if verbose {
